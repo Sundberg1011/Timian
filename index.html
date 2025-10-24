@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="no">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Værmelding — Halden</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: linear-gradient(to bottom, #8ec5fc, #e0c3fc);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: #0b1220;
+    }
+
+    .card {
+      max-width: 800px;
+      width: 90%;
+      padding: 24px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+      text-align: center;
+      animation: fadeIn 1s ease-in-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: 2rem;
+      color: #003366;
+    }
+
+    .meta { color: #334; font-size: 0.9rem; }
+
+    .weather-icon {
+      font-size: 90px;
+      margin: 20px 0;
+      text-shadow: 0 0 10px rgba(0,0,0,0.1);
+      animation: float 3s ease-in-out infinite;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+
+    .big { font-size: 2.8rem; font-weight: 600; color: #004c99; }
+    .small { font-size: 1rem; color: #223; }
+
+    .hourly {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 12px;
+      margin-top: 20px;
+    }
+
+    .hour-card {
+      background: linear-gradient(135deg, #dbeafe, #e0f2fe);
+      padding: 12px;
+      border-radius: 12px;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .hour-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+    }
+
+    .hour-icon { font-size: 32px; margin-bottom: 6px; }
+
+    .error {
+      color: #9b1c1c;
+      background: #ffecec;
+      padding: 10px;
+      border-radius: 8px;
+      text-align: center;
+      margin-top: 10px;
+    }
+
+    footer {
+      margin-top: 20px;
+      font-size: 0.85rem;
+      color: #334;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>☁️ Værmelding for Halden ☀️</h1>
+    <div class="meta">Kilde: MET Norway Locationforecast</div>
+    <div id="status" class="meta">Laster værdata...</div>
+
+    <div id="forecast" style="display:none;">
+      <div class="weather-icon" id="icon">☀️</div>
+      <div id="temp" class="big">-- °C</div>
+      <div id="desc" class="small">--</div>
+      <div id="wind" class="small">Vind: -- m/s</div>
+      <div id="precip" class="small">Nedbør: --</div>
+      <div id="time" class="meta small"></div>
+      <div class="hourly" id="hours"></div>
+    </div>
+
+    <div id="err" style="display:none;" class="error"></div>
+    <footer>Koordinater: Halden (59.1248, 11.3875)</footer>
+  </div>
+
+  <script>
+  const lat = 59.1248;
+  const lon = 11.3875;
+  const iconEl = document.getElementById('icon');
+  const icons = {
+    'clearsky_day':'☀️','clearsky_night':'🌙','cloudy':'☁️','fair_day':'🌤️','fair_night':'🌙',
+    'rainshowers_day':'🌦️','rainshowers_night':'🌧️','rain':'🌧️','lightrain':'🌦️','heavyrain':'🌧️',
+    'snow':'❄️','lightsnow':'🌨️','heavysnow':'❄️','fog':'🌫️','sleet':'🌨️','thunderstorm':'⛈️'
+  };
+
+  async function loadForecast(){
+    try{
+      const url = `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${lat}&lon=${lon}`;
+      const r = await fetch(url,{headers:{'Accept':'application/json'}});
+      if(!r.ok) throw new Error(r.status+' '+r.statusText);
+      const data = await r.json();
+      const ts = data.properties.timeseries;
+      const first = ts[0];
+      const inst = first.data.instant.details;
+      const next = first.data.next_1_hours || first.data.next_6_hours;
+      const sym = next?.summary?.symbol_code || 'clearsky_day';
+
+      document.getElementById('temp').textContent = inst.air_temperature.toFixed(1)+' °C';
+      document.getElementById('desc').textContent = sym.replaceAll('_',' ');
+      document.getElementById('wind').textContent = 'Vind: '+inst.wind_speed.toFixed(1)+' m/s';
+      document.getElementById('precip').textContent = next?.details?.precipitation_amount ? 'Nedbør: '+next.details.precipitation_amount+' mm' : 'Nedbør: --';
+      document.getElementById('time').textContent = 'Oppdatert: ' + new Date(first.time).toLocaleString();
+      iconEl.textContent = icons[sym] || '☀️';
+
+      const hours = document.getElementById('hours');
+      hours.innerHTML = '';
+      for(let i=0;i<8;i++){
+        const e = ts[i];
+        const t = new Date(e.time);
+        const d = e.data.instant.details;
+        const code = e.data.next_1_hours?.summary?.symbol_code || 'clearsky_day';
+        const div = document.createElement('div');
+        div.className='hour-card';
+        div.innerHTML = `<div>${t.getHours()}:00</div><div class='hour-icon'>${icons[code]||'☀️'}</div><div>${d.air_temperature.toFixed(1)}°C</div>`;
+        hours.appendChild(div);
+      }
+      document.getElementById('status').style.display='none';
+      document.getElementById('forecast').style.display='block';
+    }catch(err){
+      document.getElementById('status').style.display='none';
+      document.getElementById('err').style.display='block';
+      document.getElementById('err').textContent = err.message;
+    }
+  }
+  loadForecast();
+  </script>
+</body>
+</html>
